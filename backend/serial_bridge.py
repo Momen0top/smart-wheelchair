@@ -106,8 +106,8 @@ class SerialBridge:
         buffer = ""
         while self._running:
             try:
-                if self._ser and self._ser.in_available:
-                    raw = self._ser.read(self._ser.in_available)
+                if self._ser and self._ser.in_waiting:
+                    raw = self._ser.read(self._ser.in_waiting)
                     buffer += raw.decode("utf-8", errors="replace")
                     
                     # Robust splitting by newline OR by message start tags
