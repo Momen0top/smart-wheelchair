@@ -5,10 +5,10 @@ After=network.target
 [Service]
 Type=simple
 # If your username on the Pi is not 'toppa' or 'pi', change this to your actual username.
-User=pi
-WorkingDirectory=/home/pi/smartchair_backend
+User=momen
+WorkingDirectory=/home/momen/smartchair_backend
 # Adjust the path to where your backend directory is placed
-ExecStart=/home/pi/smartchair_backend/venv/bin/python main.py
+ExecStart=/home/momen/smartchair_backend/venv/bin/python main.py
 Restart=on-failure
 RestartSec=5
 

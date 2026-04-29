@@ -64,6 +64,11 @@ class SerialBridge:
         return self._motor_state
 
     @property
+    def state(self) -> str:
+        """Compatibility property for MotorController.state"""
+        return self._motor_state
+
+    @property
     def is_scanning(self) -> bool:
         return self._scanning
 
@@ -163,11 +168,16 @@ class SerialBridge:
     def set_speed(self, speed: int) -> bool:
         return self.send(f"CMD:SPEED:{max(0, min(100, speed))}")
 
+    def start(self):
+        """Compatibility method for LidarScanner. Already handled in connect()."""
+        pass
+
     # ── Reader thread ───────────────────────────
 
     def _reader_loop(self) -> None:
         """Background thread: continuously reads lines from ESP32."""
         logger.info("Serial reader started")
+        buffer = ""
 
         while self._running:
             if not self._ser or not self._ser.is_open:
@@ -175,21 +185,32 @@ class SerialBridge:
                 continue
 
             try:
-                raw = self._ser.readline()
-                if not raw:
-                    continue
-                line = raw.decode("utf-8", errors="replace").strip()
-                if not line:
-                    continue
-
-                self._parse_line(line)
+                if self._ser.in_waiting > 0:
+                    raw = self._ser.read(self._ser.in_waiting)
+                    if not raw:
+                        continue
+                    
+                    # Add to buffer and split by newlines
+                    buffer += raw.decode("utf-8", errors="replace")
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        line = line.strip()
+                        if line:
+                            self._parse_line(line)
+                else:
+                    time.sleep(0.01)
 
             except serial.SerialException as e:
-                logger.error("Serial read error: %s", e)
+                logger.error("Serial error (will retry): %s", e)
                 self._connected = False
-                time.sleep(1)
+                if self._ser:
+                    try: self._ser.close()
+                    except: pass
+                time.sleep(2)
+                self.connect()
             except Exception as e:
-                logger.warning("Parse error: %s", e)
+                logger.warning("Reader loop error: %s", e)
+                time.sleep(0.5)
 
         logger.info("Serial reader stopped")
 

@@ -78,3 +78,10 @@ ROBOT_ID = "smartchair-001"
 # Data files
 # ──────────────────────────────────────────────
 ROOMS_FILE = "rooms.json"
+
+# ──────────────────────────────────────────────
+# Serial Bridge (ESP32)
+# ──────────────────────────────────────────────
+SERIAL_PORT = "/dev/ttyUSB0"  # Adjust if needed (/dev/ttyACM0)
+SERIAL_BAUD = 115200
+SERIAL_TIMEOUT = 1.0

@@ -38,13 +38,14 @@ from mapping_engine import MappingEngine
 from room_manager import RoomManager
 from navigator import Navigator
 from command_interpreter import CommandInterpreter
+from serial_bridge import SerialBridge
 from pairing import generate_qr_bytes, get_pairing_payload
 from utils import logger
 
 
 # ── Globals ─────────────────────────────────────
-motor: MotorController | None = None
-scanner: LidarScanner | None = None
+motor: SerialBridge | None = None
+scanner: SerialBridge | None = None
 mapper: MappingEngine | None = None
 rooms: RoomManager | None = None
 nav: Navigator | None = None
@@ -98,16 +99,18 @@ async def broadcast_map():
 async def lifespan(app: FastAPI):
     global motor, scanner, mapper, rooms, nav, interpreter
 
-    logger.info("🚀  SmartChair v3 starting …")
+    logger.info("🚀  SmartChair v3 starting (Serial/ESP32 Mode) …")
 
-    motor = MotorController()
-    scanner = LidarScanner()
+    bridge = SerialBridge()
+    if not bridge.connect():
+        logger.error("❌  Could not connect to ESP32! Check SERIAL_PORT in config.py")
+    
+    motor = bridge
+    scanner = bridge
     mapper = MappingEngine()
     rooms = RoomManager()
     nav = Navigator(mapper, motor, scanner)
     interpreter = CommandInterpreter()
-
-    scanner.start()
 
     # Start background map updater
     task = asyncio.create_task(map_update_loop())
@@ -118,10 +121,8 @@ async def lifespan(app: FastAPI):
     logger.info("🛑  Shutting down …")
     if nav:
         nav.cancel()
-    if scanner:
-        scanner.cleanup()
     if motor:
-        motor.cleanup()
+        motor.disconnect()
     logger.info("Goodbye.")
 
 
@@ -315,4 +316,4 @@ async def ws_map(websocket: WebSocket):
 # ── Run ──────────────────────────────────────
 if __name__ == "__main__":
     uvicorn.run("main:app", host=SERVER_HOST, port=SERVER_PORT,
-                reload=False, log_level="info")
+                reload=False, log_level="debug")

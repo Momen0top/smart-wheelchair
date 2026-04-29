@@ -46,16 +46,19 @@ class LidarScanner:
             GPIO.output(p, 0)
 
         # ── VL53L0X ──
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self._sensor = adafruit_vl53l0x.VL53L0X(i2c)
-        self._sensor.measurement_timing_budget = 30_000
-
-        logger.info("LidarScanner ready")
+        try:
+            i2c = busio.I2C(board.SCL, board.SDA)
+            self._sensor = adafruit_vl53l0x.VL53L0X(i2c)
+            self._sensor.measurement_timing_budget = 30_000
+            logger.info("LidarScanner ready")
+        except Exception as e:
+            self._sensor = None
+            logger.error("Failed to initialize VL53L0X sensor: %s. Continuing without LIDAR.", e)
 
     # ── properties ───────────────────────────
     @property
     def is_scanning(self) -> bool:
-        return self._running
+        return self._running and self._sensor is not None
 
     @property
     def obstacle_alert(self) -> bool:
@@ -74,6 +77,8 @@ class LidarScanner:
         time.sleep(STEPPER_DELAY)
 
     def _read_distance(self) -> float:
+        if self._sensor is None:
+            return -1.0
         try:
             return float(self._sensor.range)
         except Exception:
