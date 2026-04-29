@@ -108,8 +108,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _quick(String cmd) {
-    // Use WebSocket for low-latency movement
-    widget.ws.sendCommand(cmd);
+    // Revert to HTTP for guaranteed delivery
+    widget.api.sendCommand(cmd);
     setState(() => _cmdResult = cmd.split(' ').last.toUpperCase());
   }
 

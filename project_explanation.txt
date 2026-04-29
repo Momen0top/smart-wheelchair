@@ -1,0 +1,71 @@
+================================================================================
+                                PROJECT EXPLANATION
+================================================================================
+
+PROJECT NAME: SmartChair v3
+OVERVIEW:
+SmartChair v3 is an advanced, autonomous robotic wheelchair system designed to 
+assist individuals with mobility challenges. The system integrates real-time 
+mapping, obstacle avoidance, and multi-modal control (Voice, Mobile App, and 
+Manual) into a reliable and modular architecture.
+
+CORE ARCHITECTURE:
+The system is built on a three-tier modular architecture:
+1. Computation Layer (Raspberry Pi 3B): Acting as the "brain," the Raspberry Pi 
+   handles high-level processing, including SLAM (Simultaneous Localization and 
+   Mapping), pathfinding using the A* algorithm, and Natural Language 
+   Processing (NLP) for voice commands. It also hosts a web server to 
+   communicate with the mobile application.
+2. Hardware Layer (ESP32): Acting as the "muscle," the ESP32 microcontroller 
+   directly controls the motors and gathers raw sensor data (LIDAR and IMU). 
+   It communicates with the Raspberry Pi via a USB serial connection.
+3. User Layer (Flutter Mobile App): The primary interface for the user, 
+   offering a live 2D map, room management, voice interaction, and manual 
+   D-pad controls over a local Wi-Fi connection.
+
+KEY FEATURES:
+- 360° LIDAR Mapping: Uses a Time-of-Flight (ToF) laser sensor mounted on a 
+  stepper motor to create precise occupancy grid maps of the environment.
+- Autonomous Navigation: Utilizes the A* algorithm to calculate the safest and 
+  shortest path to a saved room while dynamically avoiding obstacles.
+- Voice Control: Integrates NLP to interpret natural language commands like 
+  "Take me to the kitchen" or "Go back," translating them into movement actions.
+- Glassmorphic UI: A modern, intuitive mobile application built with Flutter 
+  that renders the map in real-time via WebSockets.
+- Safety Systems: Includes an instant Emergency Stop (E-Stop) feature and 
+  virtual wall "inflation" to prevent the wheelchair from clipping obstacles.
+
+TECHNICAL STACK:
+- Backend: Python, FastAPI, WebSockets, asyncio.
+- Firmware: C++ (Arduino/ESP32).
+- Frontend: Flutter (Dart).
+- Hardware: Raspberry Pi 3B, ESP32, VL53L1X ToF Sensor, MPU6050 IMU, 
+            L298N Motor Drivers.
+
+================================================================================
+                          وصف المشروع (باللغة العربية)
+================================================================================
+
+اسم المشروع: الكرسي الذكي (SmartChair v3)
+
+نظرة عامة:
+يعتبر "SmartChair v3" نظام كرسي متحرك روبوتي متطور وذاتي القيادة، مصمم لمساعدة الأفراد ذوي التحديات الحركية. يدمج النظام تقنيات رسم الخرائط في الوقت الفعلي، وتجنب العوائق، والتحكم متعدد الوسائط (الصوت، تطبيق الهاتف، والتحكم اليدوي) ضمن بنية برمجية وهاردوير معيارية وموثوقة.
+
+البنية الأساسية للنظام:
+يعتمد النظام على بنية ثلاثية الطبقات:
+1. طبقة الحوسبة (Raspberry Pi 3B): تعمل كـ "عقل" النظام، حيث تتعامل مع العمليات عالية المستوى بما في ذلك تقنية SLAM (التحديد المتزامن للموقع ورسم الخرائط)، تخطيط المسار باستخدام خوارزمية *A، ومعالجة اللغات الطبيعية (NLP) للأوامر الصوتية. كما يستضيف خادماً للتواصل مع تطبيق الهاتف المحمول.
+2. طبقة العتاد/الهاردوير (ESP32): تعمل كـ "عضلات" النظام، حيث يتحكم المتحكم الدقيق ESP32 بشكل مباشر في المحركات ويجمع البيانات الخام من الحساسات (LIDAR و IMU). يتواصل مع الـ Raspberry Pi عبر اتصال تسلسلي (USB).
+3. طبقة المستخدم (تطبيق Flutter): الواجهة الأساسية للمستخدم، حيث يوفر خريطة ثنائية الأبعاد حية، وإدارة الغرف، والتفاعل الصوتي، وعناصر تحكم يدوية (D-pad) عبر اتصال Wi-Fi محلي.
+
+المميزات الرئيسية:
+- رسم الخرائط بتقنية LIDAR (360 درجة): يستخدم حساس ليزر (ToF) مثبتاً على محرك خطوي (Stepper) لإنشاء خرائط دقيقة للبيئة المحيطة.
+- الملاحة الذاتية: تعتمد على خوارزمية *A لحساب أقصر وأكثر المسارات أماناً للوصول إلى غرفة محفوظة مع تجنب العوائق ديناميكياً.
+- التحكم الصوتي: يدمج معالجة اللغات الطبيعية لتفسير الأوامر العادية مثل "خذني إلى المطبخ" أو "ارجع للخلف"، وترجمتها إلى حركات فعلية.
+- واجهة مستخدم عصرية: تطبيق محمول مبني باستخدام Flutter يعرض الخريطة في الوقت الفعلي عبر تقنية WebSockets.
+- أنظمة الأمان: يتضمن ميزة التوقف الطارئ الفوري (Emergency Stop) وخاصية "توسيع الجدران الافتراضي" لضمان عدم اصطدام الكرسي بالعوائق.
+
+التقنيات المستخدمة:
+- الواجهة الخلفية (Backend): Python, FastAPI, WebSockets.
+- البرمجيات المدمجة (Firmware): ++C (Arduino/ESP32).
+- الواجهة الأمامية (Frontend): Flutter (Dart).
+- الهاردوير: Raspberry Pi 3B, ESP32, VL53L1X Sensor, MPU6050 IMU, L298N Motor Drivers.

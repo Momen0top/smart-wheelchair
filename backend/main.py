@@ -127,6 +127,10 @@ async def lifespan(app: FastAPI):
         "right":    lambda: motor.turn_right(),
     }
 
+    # Start scanning immediately
+    if scanner:
+        scanner.send("CMD:SCAN_START")
+
     # Start background map updater
     task = asyncio.create_task(map_update_loop())
 
@@ -212,19 +216,21 @@ async def delete_room(name: str):
 async def navigate(req: NavRequest):
     logger.info("📍  Navigate: %s", req.room_name)
     await process_incoming_command(f"go to {req.room_name}")
-    return {"status": "accepted"}
+    return {"intent": "navigate", "status": "started", "parameter": req.room_name}
+
 
 @app.post("/command")
 async def post_command(req: CommandRequest):
     logger.info("🎮  Command: %s", req.text)
     await process_incoming_command(req.text)
-    return {"status": "accepted"}
+    return {"intent": "command", "status": "accepted", "text": req.text}
+
 
 @app.post("/stop")
 async def post_stop():
     logger.info("🛑  STOP")
     await process_incoming_command("stop")
-    return {"status": "stopped"}
+    return {"intent": "stop", "status": "stopped"}
 
 @app.get("/pairing/qr")
 async def get_qr():

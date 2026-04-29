@@ -1,0 +1,5 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "esp_selfmade")(type "KiCad")(uri "${KIPRJMOD}/esp_selfmade.kicad_sym")(options "")(descr ""))
+  (lib (name "stepper")(type "KiCad")(uri "${KIPRJMOD}/stepper.kicad_sym")(options "")(descr ""))
+)

@@ -65,19 +65,30 @@ class SerialBridge:
         with self._encoders_lock: return dict(self._encoders)
 
     def connect(self) -> bool:
-        """Open serial port and start reader thread."""
-        try:
-            self._ser = serial.Serial(port=self._port, baudrate=self._baud, timeout=self._timeout)
-            time.sleep(2)
-            self._connected = True
-            self._running = True
-            self._thread = threading.Thread(target=self._reader_loop, daemon=True)
-            self._thread.start()
-            logger.info("Serial connected on %s @ %d", self._port, self._baud)
-            return True
-        except Exception as e:
-            logger.error("Serial connect failed: %s", e)
-            return False
+        """Open serial port and start reader thread. Auto-detects port if needed."""
+        ports_to_try = [self._port, "/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyACM1"]
+        
+        import glob
+        available_ports = glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*")
+        for p in available_ports:
+            if p not in ports_to_try: ports_to_try.append(p)
+
+        for port in ports_to_try:
+            try:
+                logger.info("Attempting to connect to ESP32 on %s...", port)
+                self._ser = serial.Serial(port=port, baudrate=self._baud, timeout=self._timeout)
+                time.sleep(2)
+                self._connected = True
+                self._running = True
+                self._thread = threading.Thread(target=self._reader_loop, daemon=True)
+                self._thread.start()
+                logger.info("✅  Serial connected on %s @ %d", port, self._baud)
+                return True
+            except Exception:
+                continue
+        
+        logger.error("❌  Could not find ESP32 on any serial port!")
+        return False
 
     def disconnect(self):
         self._running = False
@@ -131,11 +142,12 @@ class SerialBridge:
         if not line: return
 
         if line.startswith("SCAN:"):
+            logger.info("📡  Lidar data received: %s", line)
             try:
                 parts = line[5:].split(",")
                 if len(parts) == 2:
                     with self._scan_lock:
-                        self._scan_building.append({"angle": float(parts[0]), "dist": float(parts[1])})
+                        self._scan_building.append({"angle": float(parts[0]), "distance": float(parts[1])})
             except: pass
         elif line == "SCAN_DONE":
             with self._scan_lock:
