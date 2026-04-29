@@ -49,6 +49,15 @@ class WebSocketService {
     _reconnectTimer = Timer(const Duration(seconds: 3), _doConnect);
   }
 
+  void sendCommand(String text) {
+    if (_channel != null) {
+      _channel!.sink.add(jsonEncode({
+        'type': 'command',
+        'text': text,
+      }));
+    }
+  }
+
   void disconnect() {
     _reconnectTimer?.cancel();
     _channel?.sink.close();

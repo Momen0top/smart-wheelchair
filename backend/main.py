@@ -32,8 +32,6 @@ from models import (
     CommandRequest, CommandResponse, NavRequest,
     RoomCreateRequest, StatusResponse, ScanResponse,
 )
-from motor_controller import MotorController
-from lidar_scanner import LidarScanner
 from mapping_engine import MappingEngine
 from room_manager import RoomManager
 from navigator import Navigator
@@ -54,15 +52,18 @@ interpreter: CommandInterpreter | None = None
 # WebSocket clients
 ws_clients: List[WebSocket] = []
 
+MOVE_ACTIONS = {} # Will be populated in lifespan
+
 
 # ── Background map updater ──────────────────────
 async def map_update_loop():
     """Periodically integrates scans into the map and broadcasts."""
     while True:
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(2.0) # Slow down updates to save bandwidth
         if scanner and mapper:
             scan = scanner.get_scan_data()
             if scan:
+                logger.info("Integrating scan (%d points) into map...", len(scan))
                 mapper.update_from_scan(scan)
                 await broadcast_map()
 
@@ -71,6 +72,8 @@ async def broadcast_map():
     """Send current map to all WebSocket clients."""
     if not mapper or not ws_clients:
         return
+    
+    logger.debug("Broadcasting map to %d clients...", len(ws_clients))
     try:
         data = json.dumps({
             "type": "map",
@@ -82,14 +85,19 @@ async def broadcast_map():
             "robot_yaw": mapper.robot_yaw,
             "cells": mapper.get_grid_list(),
         })
+        
         dead = []
         for ws in ws_clients:
             try:
-                await ws.send_text(data)
+                await asyncio.wait_for(ws.send_text(data), timeout=1.0)
             except Exception:
                 dead.append(ws)
+        
         for d in dead:
-            ws_clients.remove(d)
+            try:
+                ws_clients.remove(d)
+            except ValueError:
+                pass
     except Exception as e:
         logger.warning("Broadcast error: %s", e)
 
@@ -97,7 +105,7 @@ async def broadcast_map():
 # ── Lifespan ────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global motor, scanner, mapper, rooms, nav, interpreter
+    global motor, scanner, mapper, rooms, nav, interpreter, MOVE_ACTIONS
 
     logger.info("🚀  SmartChair v3 starting (Serial/ESP32 Mode) …")
 
@@ -111,6 +119,13 @@ async def lifespan(app: FastAPI):
     rooms = RoomManager()
     nav = Navigator(mapper, motor, scanner)
     interpreter = CommandInterpreter()
+
+    MOVE_ACTIONS = {
+        "forward":  lambda: motor.move_forward(),
+        "backward": lambda: motor.move_backward(),
+        "left":     lambda: motor.turn_left(),
+        "right":    lambda: motor.turn_right(),
+    }
 
     # Start background map updater
     task = asyncio.create_task(map_update_loop())
@@ -153,7 +168,6 @@ async def get_status():
         target_room=nav.target_room if nav else "",
     )
 
-
 @app.get("/map")
 async def get_map():
     if not mapper:
@@ -168,28 +182,17 @@ async def get_map():
         "cells": mapper.get_grid_list(),
     }
 
-
 @app.get("/scan")
 async def get_scan():
     if not scanner:
         raise HTTPException(503, "Scanner not ready")
     return ScanResponse(data=scanner.get_scan_data())
 
-
-@app.get("/lidar")
-async def get_lidar():
-    """Alias for /scan (matches spec)."""
-    return await get_scan()
-
-
-# ── Rooms ────────────────────────────────────
-
 @app.get("/rooms")
 async def list_rooms():
     if not rooms:
-        raise HTTPException(503, "Room manager not ready")
+        raise HTTPException(503)
     return rooms.list_rooms()
-
 
 @app.post("/rooms")
 async def create_room(req: RoomCreateRequest):
@@ -197,96 +200,36 @@ async def create_room(req: RoomCreateRequest):
         raise HTTPException(503)
     return rooms.set_room(req.name, req.x, req.y)
 
-
 @app.delete("/rooms/{name}")
 async def delete_room(name: str):
     if not rooms:
         raise HTTPException(503)
     if rooms.delete_room(name):
         return {"status": "deleted"}
-    raise HTTPException(404, f"Room '{name}' not found")
-
-
-# ── Navigation ───────────────────────────────
+    raise HTTPException(404)
 
 @app.post("/navigate")
 async def navigate(req: NavRequest):
-    if not nav or not rooms:
-        raise HTTPException(503, "Not ready")
-
-    room = rooms.get_room(req.room_name)
-    if not room:
-        raise HTTPException(404, f"Room '{req.room_name}' not found")
-
-    success = nav.navigate_to(room["name"], room["x"], room["y"])
-    if not success:
-        raise HTTPException(400, "No path found")
-
-    return {"status": "navigating", "room": room["name"]}
-
-
-# ── Commands ─────────────────────────────────
-
-MOVE_ACTIONS = {
-    "forward":  lambda: motor.move_forward(),
-    "backward": lambda: motor.move_backward(),
-    "left":     lambda: motor.turn_left(),
-    "right":    lambda: motor.turn_right(),
-}
-
+    logger.info("📍  Navigate: %s", req.room_name)
+    await process_incoming_command(f"go to {req.room_name}")
+    return {"status": "accepted"}
 
 @app.post("/command")
 async def post_command(req: CommandRequest):
-    if not interpreter or not motor:
-        raise HTTPException(503)
-
-    result = interpreter.interpret(req.text)
-    intent = result["intent"]
-    param = result["parameter"]
-
-    if intent == "navigate" and nav and rooms:
-        room = rooms.get_room(param)
-        if room:
-            nav.navigate_to(room["name"], room["x"], room["y"])
-            return CommandResponse(intent=f"navigate:{param}", parameter=param, status="navigating")
-        return CommandResponse(intent=f"navigate:{param}", parameter=param, status="room_not_found")
-
-    if intent == "move":
-        action = MOVE_ACTIONS.get(param)
-        if action:
-            action()
-        return CommandResponse(intent=f"move:{param}", parameter=param, status="executed")
-
-    if intent == "stop":
-        motor.stop()
-        if nav and nav.is_navigating:
-            nav.cancel()
-        return CommandResponse(intent="stop", status="stopped")
-
-    if intent == "scan":
-        if scanner and not scanner.is_scanning:
-            scanner.start()
-        return CommandResponse(intent="scan", status="scanning")
-
-    return CommandResponse(intent=intent, parameter=param, status=result["status"])
-
+    logger.info("🎮  Command: %s", req.text)
+    await process_incoming_command(req.text)
+    return {"status": "accepted"}
 
 @app.post("/stop")
 async def post_stop():
-    if motor:
-        motor.stop()
-    if nav and nav.is_navigating:
-        nav.cancel()
+    logger.info("🛑  STOP")
+    await process_incoming_command("stop")
     return {"status": "stopped"}
-
-
-# ── Pairing ──────────────────────────────────
 
 @app.get("/pairing/qr")
 async def get_qr():
     img_bytes = generate_qr_bytes()
     return Response(content=img_bytes, media_type="image/png")
-
 
 @app.get("/pairing/info")
 async def get_pairing_info():
@@ -294,26 +237,49 @@ async def get_pairing_info():
 
 
 # ═══════════════════════════════════════════════
-#  WEBSOCKET
+#  WEBSOCKET & COMMAND LOGIC
 # ═══════════════════════════════════════════════
 
+async def process_incoming_command(text: str):
+    """Unified command processor for HTTP and WebSocket."""
+    if not interpreter or not motor:
+        return
+    
+    result = interpreter.interpret(text)
+    intent = result["intent"]
+    param = result["parameter"]
+
+    if intent == "navigate" and nav and rooms:
+        room = rooms.get_room(param)
+        if room:
+            nav.navigate_to(room["name"], room["x"], room["y"])
+    elif intent == "move":
+        action = MOVE_ACTIONS.get(param)
+        if action: action()
+    elif intent == "stop":
+        motor.stop()
+        if nav and nav.is_navigating: nav.cancel()
+    elif intent == "scan":
+        if scanner: scanner.send("CMD:SCAN_START")
+
 @app.websocket("/ws/map")
-async def ws_map(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     ws_clients.append(websocket)
-    logger.info("WebSocket client connected (%d total)", len(ws_clients))
+    logger.info("📡  WebSocket connected (%d total)", len(ws_clients))
     try:
         while True:
-            # Keep alive — client can send pings
             data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text("pong")
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "command":
+                    await process_incoming_command(msg.get("text", ""))
+            except: pass
     except WebSocketDisconnect:
-        ws_clients.remove(websocket)
-        logger.info("WebSocket client disconnected (%d remaining)", len(ws_clients))
+        if websocket in ws_clients: ws_clients.remove(websocket)
+    except Exception:
+        if websocket in ws_clients: ws_clients.remove(websocket)
 
 
-# ── Run ──────────────────────────────────────
 if __name__ == "__main__":
-    uvicorn.run("main:app", host=SERVER_HOST, port=SERVER_PORT,
-                reload=False, log_level="debug")
+    uvicorn.run("main:app", host=SERVER_HOST, port=SERVER_PORT, reload=False)
