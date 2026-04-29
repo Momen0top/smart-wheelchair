@@ -161,6 +161,9 @@ class SerialBridge:
                 if len(p) == 7:
                     with self._imu_lock:
                         self._imu = {"ax":float(p[0]),"ay":float(p[1]),"az":float(p[2]),"gx":float(p[3]),"gy":float(p[4]),"gz":float(p[5]),"yaw":float(p[6])}
+                    if self.mapper:
+                        import math
+                        self.mapper.robot_yaw = math.radians(float(p[6]))
             except: pass
         elif line.startswith("ENC:"):
             try:
